@@ -32,6 +32,7 @@ const state = {
 const $ = id => document.getElementById(id);
 const grid        = $('grid');
 const loading     = $('loading');
+const loadingMsg  = $('loadingMsg');
 const emptyState  = $('emptyState');
 const pagination  = $('pagination');
 const resultsMeta = $('resultsMeta');
@@ -575,9 +576,23 @@ function updateMeta(total) {
 /* ==========================================================================
    UI helpers
    ========================================================================== */
+let loadingMsgTimer = null;
+
+/* The Render free-tier backend spins down after ~15 minutes idle and takes
+ * 30-60s to wake on the next request. A bare spinner during that wait reads
+ * as "broken", not "slow" — after 5s, explain what's actually happening. */
 function showLoading(on) {
   loading.style.display = on ? 'block' : 'none';
-  if (on) grid.innerHTML = '';
+  clearTimeout(loadingMsgTimer);
+  if (on) {
+    grid.innerHTML = '';
+    if (loadingMsg) loadingMsg.textContent = 'Loading opportunities…';
+    loadingMsgTimer = setTimeout(() => {
+      if (loadingMsg) {
+        loadingMsg.textContent = 'Still loading — the server may be waking up after inactivity (up to a minute on the first visit).';
+      }
+    }, 5000);
+  }
 }
 
 function showEmpty(msg = null) {

@@ -1,0 +1,31 @@
+name: Keep Render backend warm
+
+# Render's free tier spins the backend down after ~15 minutes with no
+# HTTP traffic, and the next real visitor eats a 30-60s cold start. This
+# pings /health often enough that it never goes idle long enough to spin
+# down. GitHub's scheduler doesn't guarantee the exact minute a cron job
+# fires (usually a few minutes of slop, more under load) — 10 minutes
+# gives comfortable margin under Render's 15-minute idle window even
+# with that slop.
+#
+# This buys time, not a fix: it can't outrun a GitHub Actions scheduling
+# delay past 15 minutes, and it does nothing for the very first request
+# after a deploy. Upgrading off the free plan is the actual fix.
+
+on:
+  schedule:
+    - cron: "*/10 * * * *"
+  workflow_dispatch: {}
+
+permissions:
+  contents: read
+
+jobs:
+  ping:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Ping backend health endpoint
+        run: |
+          curl -sS -o /dev/null -w "health check: %{http_code} (%{time_total}s)\n" \
+            --max-time 90 \
+            "https://adab-opportunityfinder.onrender.com/health"
