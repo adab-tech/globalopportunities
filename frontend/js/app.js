@@ -172,6 +172,14 @@ function bindEvents() {
   $('closeSaveModal').addEventListener('click', () => { saveModal.style.display = 'none'; });
   $('saveForm').addEventListener('submit', onSaveSubmit);
 
+  /* Pagination — delegated, since script-src has no 'unsafe-inline' and
+     the buttons are re-rendered on every page change (see pgBtn/goPage). */
+  pagination.addEventListener('click', e => {
+    const btn = e.target.closest('.page-btn');
+    if (!btn || btn.disabled) return;
+    const p = parseInt(btn.dataset.page, 10);
+    if (p) goPage(p);
+  });
 }
 
 function doSearch() {
@@ -556,10 +564,10 @@ function renderPagination(total) {
 function pgBtn(label, targetPage, disabled, active = false) {
   return `<button class="page-btn${active ? ' active' : ''}"
     ${disabled ? 'disabled' : ''}
-    onclick="goPage(${targetPage})">${label}</button>`;
+    data-page="${targetPage}">${label}</button>`;
 }
 
-/* Called from inline onclick in pagination buttons */
+/* Called from the delegated click listener on `pagination` (bindEvents) */
 function goPage(p) {
   state.page = p;
   window.scrollTo({ top: 0, behavior: 'smooth' });

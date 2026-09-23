@@ -1,6 +1,11 @@
+import fs from 'node:fs';
+import path from 'node:path';
+import { fileURLToPath } from 'node:url';
 import { beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 import { loadScript } from './support/loadScript.js';
 import { APP_HTML } from './support/fixtures.js';
+
+const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
 beforeAll(() => {
   document.body.innerHTML = APP_HTML;
@@ -106,6 +111,13 @@ describe('pgBtn / renderPagination', () => {
     renderPagination(5);
     expect(pagination.innerHTML).toBe('');
   });
+
+  it('never emits an inline event-handler attribute (backend CSP has no unsafe-inline/unsafe-hashes; an onclick="..." attribute here is silently inert in every real browser, not just a lint nit - this exact bug shipped once already)', () => {
+    const src = fs.readFileSync(path.join(__dirname, '..', 'js', 'app.js'), 'utf-8');
+    // Matches HTML attribute syntax (on<word>="...") specifically, not JS
+    // identifiers like `const onCopied = ...` that happen to start with "on".
+    expect(src).not.toMatch(/\son[a-z]+\s*=\s*["']/i);
+  });
 });
 
 describe('search autocomplete', () => {
@@ -178,5 +190,28 @@ describe('copy-to-clipboard button', () => {
     expect(writeText).toHaveBeenCalledWith('hello@globalopportunities.app');
     expect(btn.classList.contains('is-copied')).toBe(true);
     expect(btn.querySelector('.copy-btn-label').textContent).toBe('Copied!');
+  });
+});
+
+/* Runs last in this file deliberately: bindEvents() wires up every listener
+   on the page (search, filters, save modal, pagination, ...) for real, the
+   same way DOMContentLoaded does in production, so it must not run before
+   earlier tests that assume nothing is bound yet. */
+describe('pagination click delegation (regression: CSP has no unsafe-inline)', () => {
+  it('clicking a rendered page button actually changes the page', () => {
+    global.fetch = vi.fn().mockResolvedValue({
+      ok: true,
+      json: async () => ({ data: [], total: 30, total_pages: 3 }),
+    });
+    bindEvents();
+    state.page = 1;
+    state.totalPages = 3;
+    renderPagination(30);
+
+    const nextBtn = [...pagination.querySelectorAll('.page-btn')]
+      .find(b => b.textContent.includes('Next'));
+    nextBtn.click();
+
+    expect(state.page).toBe(2);
   });
 });
