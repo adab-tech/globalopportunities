@@ -51,3 +51,7 @@ cd frontend && npm test
 ```
 
 CI (`.github/workflows/ci.yml`) runs both suites plus `ruff` lint on every push/PR to `main`.
+
+## License
+
+All rights reserved — see [LICENSE](LICENSE).
