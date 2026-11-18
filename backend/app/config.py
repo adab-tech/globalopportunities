@@ -41,6 +41,7 @@ class Settings(BaseSettings):
     API_HOST: str = "0.0.0.0"
     API_PORT: int = Field(default=8000, validation_alias=AliasChoices("PORT", "API_PORT"))
     ENABLE_SCHEDULER: bool = True
+    ENABLE_STARTUP_INGEST: bool = True
     CORS_ORIGINS: str = "*"
 
     # Email alerts — with none of these keys set, emails are logged, not
