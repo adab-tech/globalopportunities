@@ -39,7 +39,8 @@ async def lifespan(app: FastAPI):
     run_pending_column_migrations(engine)
     if settings.ENABLE_SCHEDULER:
         start_scheduler()
-    threading.Thread(target=run_startup_tasks, daemon=True).start()
+    if settings.ENABLE_STARTUP_INGEST:
+        threading.Thread(target=run_startup_tasks, daemon=True).start()
     logger.info("Global Opportunities API is ready.")
     yield
     # ---- shutdown ----
