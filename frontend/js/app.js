@@ -34,6 +34,7 @@ const grid        = $('grid');
 const loading     = $('loading');
 const loadingMsg  = $('loadingMsg');
 const emptyState  = $('emptyState');
+const listingsError = $('listingsError');
 const pagination  = $('pagination');
 const resultsMeta = $('resultsMeta');
 const searchInput = $('searchInput');
@@ -43,6 +44,7 @@ const saveModal   = $('saveModal');
 
 /* opportunity id currently targeted by the save modal */
 let _pendingSaveId = null;
+let listingsRequest = null;
 
 /* ==========================================================================
    Analytics — self-hosted, no third-party tracker, no cookies.
@@ -153,6 +155,10 @@ function bindEvents() {
   /* Scrape triggers */
   scrapeBtn.addEventListener('click', triggerScrape);
   $('emptyBtn').addEventListener('click', triggerScrape);
+  $('retryListings').addEventListener('click', () => {
+    fetchStats();
+    fetchOpportunities();
+  });
   $('closeModal').addEventListener('click', () => { modal.style.display = 'none'; });
 
   /* Save-opportunity modal, and apply-click tracking */
@@ -384,7 +390,34 @@ function renderPageMeta(stats) {
   el.textContent = `${stats.total.toLocaleString()} open opportunities${updated} · expired listings never shown`;
 }
 
+async function fetchListings(url, signal) {
+  const retryDelays = [2000, 6000];
+  const retryStatuses = [502, 503, 504, 520, 521, 522, 523, 524];
+
+  for (let attempt = 0; ; attempt++) {
+    if (signal.aborted) throw signal.reason;
+
+    const response = await fetch(url, { signal }).catch(error => {
+      // Browsers reject fetch with TypeError when the network request fails.
+      if (!(error instanceof TypeError) || signal.aborted || attempt === retryDelays.length) {
+        throw error;
+      }
+      return null;
+    });
+
+    if (response?.ok) return response.json();
+    if (response && (!retryStatuses.includes(response.status) || attempt === retryDelays.length)) {
+      throw new Error(`Opportunities request failed (HTTP ${response.status})`);
+    }
+    await new Promise(resolve => setTimeout(resolve, retryDelays[attempt]));
+  }
+}
+
 async function fetchOpportunities() {
+  listingsRequest?.abort();
+  const request = new AbortController();
+  listingsRequest = request;
+  const timeout = setTimeout(() => request.abort(), 65_000);
   showLoading(true);
 
   const params = new URLSearchParams({ page: state.page, per_page: state.perPage });
@@ -395,18 +428,23 @@ async function fetchOpportunities() {
   if (state.sort && state.sort !== 'newest') params.set('sort', state.sort);
 
   try {
-    const res = await fetch(`${API_BASE}/opportunities/?${params}`);
-    if (!res.ok) throw new Error('API error');
-    const d = await res.json();
+    const d = await fetchListings(`${API_BASE}/opportunities/?${params}`, request.signal);
+    if (listingsRequest !== request) return;
     state.totalPages = d.total_pages;
     renderCards(d.data);
     renderPagination(d.total);
     updateMeta(d.total);
   } catch (err) {
-    console.error(err);
-    showEmpty('Cannot reach the backend. Make sure the API server is running on port 8000.');
+    if (listingsRequest === request) {
+      console.error(err);
+      listingsError.style.display = 'block';
+    }
   } finally {
-    showLoading(false);
+    clearTimeout(timeout);
+    if (listingsRequest === request) {
+      listingsRequest = null;
+      showLoading(false);
+    }
   }
 }
 
@@ -474,7 +512,7 @@ async function onSaveSubmit(e) {
    ========================================================================== */
 function renderCards(items) {
   if (!items || items.length === 0) {
-    showEmpty();
+    emptyState.style.display = 'block';
     grid.innerHTML = '';
     return;
   }
@@ -593,7 +631,11 @@ function showLoading(on) {
   loading.style.display = on ? 'block' : 'none';
   clearTimeout(loadingMsgTimer);
   if (on) {
+    emptyState.style.display = 'none';
+    listingsError.style.display = 'none';
     grid.innerHTML = '';
+    pagination.innerHTML = '';
+    resultsMeta.textContent = '';
     if (loadingMsg) loadingMsg.textContent = 'Loading opportunities…';
     loadingMsgTimer = setTimeout(() => {
       if (loadingMsg) {
@@ -601,11 +643,6 @@ function showLoading(on) {
       }
     }, 5000);
   }
-}
-
-function showEmpty(msg = null) {
-  emptyState.style.display = 'block';
-  if (msg) $('emptyMsg').textContent = msg;
 }
 
 function toast(msg, level = 'info') {

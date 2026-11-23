@@ -193,6 +193,51 @@ describe('copy-to-clipboard button', () => {
   });
 });
 
+describe('loading opportunities', () => {
+  it('recovers when the backend first returns a temporary error', async () => {
+    vi.useFakeTimers();
+    const fetchMock = vi.fn()
+      .mockResolvedValueOnce({ ok: false, status: 503 })
+      .mockResolvedValueOnce({
+        ok: true,
+        json: async () => ({
+          data: [{ id: 1, title: 'Available fellowship', opportunity_type: 'fellowship' }],
+          total: 1,
+          total_pages: 1,
+        }),
+      });
+    vi.stubGlobal('fetch', fetchMock);
+    try {
+      const pending = fetchOpportunities();
+      await vi.advanceTimersByTimeAsync(2000);
+      await pending;
+
+      expect(fetchMock).toHaveBeenCalledTimes(2);
+      expect(grid.textContent).toContain('Available fellowship');
+      expect(listingsError.style.display).toBe('none');
+    } finally {
+      vi.unstubAllGlobals();
+      vi.useRealTimers();
+    }
+  });
+
+  it('shows the retry panel without retrying a permanent API error', async () => {
+    const fetchMock = vi.fn().mockResolvedValue({ ok: false, status: 404 });
+    vi.stubGlobal('fetch', fetchMock);
+    const log = vi.spyOn(console, 'error').mockImplementation(() => {});
+    try {
+      await fetchOpportunities();
+      expect(fetchMock).toHaveBeenCalledTimes(1);
+      expect(listingsError.style.display).toBe('block');
+      expect(emptyState.style.display).toBe('none');
+      expect(loading.style.display).toBe('none');
+    } finally {
+      log.mockRestore();
+      vi.unstubAllGlobals();
+    }
+  });
+});
+
 /* Runs last in this file deliberately: bindEvents() wires up every listener
    on the page (search, filters, save modal, pagination, ...) for real, the
    same way DOMContentLoaded does in production, so it must not run before
