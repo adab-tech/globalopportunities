@@ -23,6 +23,9 @@ export const APP_HTML = `
     <p id="emptyMsg"></p>
     <button id="emptyBtn"></button>
   </div>
+  <div id="listingsError" style="display:none">
+    <button id="retryListings"></button>
+  </div>
   <div id="grid"></div>
   <div id="pagination"></div>
   <p id="resultsMeta"></p>
